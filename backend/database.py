@@ -4,8 +4,8 @@ Centralizes how the rest of the codebase obtains a Postgres connection so
 connection details live in exactly one place.
 """
 
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 import psycopg
 

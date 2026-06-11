@@ -24,13 +24,33 @@ Postgres running locally + an env-driven Python connection + a script that prove
 
 Common commands are in the `Makefile` — run `make help`.
 
-### Task 2 — Lock the schema and create the tables  `[ ]`
-Create `players`, `teams`, `roster_memberships`, `edges`. Decide season representation (string `"2023-24"` vs int start-year) so it sorts/range-filters cleanly. Edges stored with `a < b` to dedupe.
-**Done when:** all four tables exist with chosen types + keys; a dummy row inserts/queries in each. (Indexes deferred to Task 8.)
+### Task 2 — Lock the schema and create the tables  `[x]`  ✅ DONE
+Create `players`, `teams`, `roster_memberships`, `edges`. Still structure only — no data.
+Schema in `db/schema.sql`, applied via `make schema`. Season = INT start-year.
 
-### Task 3 — nba_api spike + resilient request wrapper  `[ ]`
-Confirm nba_api access and build the one wrapper every fetch uses: custom headers, ~0.6s+ delay, retry with exponential backoff, timeout handling.
-**Done when:** one reusable function survives ~20 consecutive calls without a rate-limit failure and recovers from a timeout/error instead of crashing.
+**Gating decision — season representation:** store as **integer start-year** (`2023` = the 2023–24 season), *not* the `"2023-24"` string. The era slider does numeric range filters constantly (`WHERE season BETWEEN x AND y`), which is clean/indexable on an int; the pretty `"2023-24"` is derived at display time.
+
+- `[x]` 2.1 Confirm season representation (int start-year) — gating decision
+- `[x]` 2.2 Write `db/schema.sql` — the four tables:
+  - `teams(id PK, abbreviation, name)` — `id` is the NBA team id
+  - `players(id PK, full_name, first_active_season, last_active_season)` — `id` is the NBA player id
+  - `roster_memberships(player_id, team_id, season)` — **composite PK** on all three (makes ingestion idempotent); FKs to players/teams
+  - `edges(player_a_id, player_b_id, shared_seasons, seasons INT[])` — PK `(player_a_id, player_b_id)`, `CHECK (player_a_id < player_b_id)` to enforce dedupe; `seasons` as `INT[]` of start-years (GIN-indexable later, not JSON)
+- `[x]` 2.3 Add a `make schema` target — pipes `db/schema.sql` into the container's `psql` (repeatable, version-controlled schema)
+- `[x]` 2.4 Apply & verify — `\dt` lists the tables; dummy inserts confirmed FKs + `a<b` CHECK fire; dummies deleted
+
+**Done when:** all four tables exist with chosen types + keys; a dummy row inserts/queries in each; re-applying the schema is safe. (Indexes deferred to Task 8.)
+
+### Task 3 — nba_api spike + resilient request wrapper  `[x]`  ✅ DONE
+Confirm nba_api access and build the one wrapper every later fetch goes through. This is the project's biggest risk (CLAUDE.md), de-risked early on a tiny scale before the Task 6 crawl. All fetch logic lives in an `ingest/` package.
+
+- `[x]` 3.1 Install `nba_api` into `.venv`; snapshot to requirements.txt
+- `[x]` 3.2 Spike — confirmed access (Lakers 2023-24 → 18 players); raw row shape observed
+- `[x]` 3.3 Build the resilient wrapper (`ingest/nba_client.py`) — polite delay (~0.6s), retry with exponential backoff, explicit timeout. **Headers: do NOT override nba_api's defaults** — overriding them caused read-timeouts; nba_api already sends correct browser headers.
+- `[x]` 3.4 Stress-test — live integration test (`make test-live`, opt-in) fetches 5 real rosters through the wrapper; passes.
+- `[x]` 3.5 Unit tests (`tests/test_nba_client.py`, pytest) — mocked: returns on success, retries transient errors, backs off exponentially (0.5→1→2→4→8s), raises after MAX_RETRIES, doesn't retry non-network errors. `make test` (unit) / `make test-live` (integration).
+
+**Done when:** ✅ 5 mocked unit tests + 5 live integration tests pass (`make test`, `make test-live`). Wrapper survives real flaky API via retry/backoff.
 
 ### Task 4 — Ingest teams  `[ ]`
 Populate `teams`. Smallest real ingestion — the end-to-end pipeline test (wrapper → parse → upsert → DB).

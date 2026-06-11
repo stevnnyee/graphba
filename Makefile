@@ -32,4 +32,19 @@ freeze: ## Snapshot current deps into requirements.txt
 healthcheck: ## Verify the DB connection works (SELECT 1)
 	python -m scripts.healthcheck
 
-.PHONY: help up down reset ps logs psql install freeze healthcheck
+schema: ## Apply db/schema.sql to the database
+	docker exec -i graphba-db psql -U graphba -d graphba < db/schema.sql
+
+test: ## Run unit tests (mocked, no network)
+	pytest
+
+test-live: ## Run integration tests that hit the real NBA API
+	pytest --run-integration
+
+lint: ## Check code with ruff (lint + import order)
+	ruff check .
+
+format: ## Auto-format code with ruff
+	ruff format .
+
+.PHONY: help up down reset ps logs psql install freeze healthcheck schema test test-live lint format
