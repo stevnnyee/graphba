@@ -32,6 +32,9 @@ freeze: ## Snapshot current deps into requirements.txt
 healthcheck: ## Verify the DB connection works (SELECT 1)
 	python -m scripts.healthcheck
 
+ingest-teams: ## Ingest NBA teams into the database (idempotent)
+	python -m scripts.ingest_teams
+
 schema: ## Apply db/schema.sql to the database
 	docker exec -i graphba-db psql -U graphba -d graphba < db/schema.sql
 
@@ -47,4 +50,4 @@ lint: ## Check code with ruff (lint + import order)
 format: ## Auto-format code with ruff
 	ruff format .
 
-.PHONY: help up down reset ps logs psql install freeze healthcheck schema test test-live lint format
+.PHONY: help up down reset ps logs psql install freeze healthcheck ingest-teams schema test test-live lint format

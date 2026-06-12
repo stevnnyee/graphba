@@ -52,8 +52,18 @@ Confirm nba_api access and build the one wrapper every later fetch goes through.
 
 **Done when:** ✅ 5 mocked unit tests + 5 live integration tests pass (`make test`, `make test-live`). Wrapper survives real flaky API via retry/backoff.
 
-### Task 4 — Ingest teams  `[ ]`
-Populate `teams`. Smallest real ingestion — the end-to-end pipeline test (wrapper → parse → upsert → DB).
+### Task 4 — Ingest teams  `[x]`  ✅ DONE
+Populate `teams`. Smallest real ingestion — first parse → upsert → DB pipeline.
+
+**Source decision:** use nba_api's **static** team table (`nba_api.stats.static.teams`) — a local list, no HTTP call, so the resilient wrapper isn't used here. Covers the 30 current franchises. Defunct/relocated teams referenced by older rosters are backfilled during the Task 6 crawl (they'd otherwise fail `roster_memberships`' FK to `teams`).
+
+- `[x]` 4.1 Decide source (static list — gating decision above)
+- `[x]` 4.2 `ingest/teams.py` — `fetch_teams()` parses static rows into `Team(id, abbreviation, name)`; maps source `full_name` → `name`
+- `[x]` 4.3 `upsert_teams(conn, teams)` — idempotent `INSERT … ON CONFLICT (id) DO UPDATE`, batched via `executemany`
+- `[x]` 4.4 Runner `scripts/ingest_teams.py` + `make ingest-teams`; logging level/format configured at the entry point
+- `[x]` 4.5 Verified: `count(*)` == 30; abbreviations match; ran twice, count stayed 30, no error
+- `[x]` 4.6 Unit tests (`tests/test_teams.py`) — parse mapping + batched upsert (mocked, no DB/network)
+
 **Done when:** `teams` populated; counts/abbreviations match reality; re-run is idempotent.
 
 ### Task 5 — Ingest the player universe  `[ ]`
