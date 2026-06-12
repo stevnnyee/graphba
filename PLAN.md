@@ -80,8 +80,22 @@ Populate `players` from `CommonAllPlayers`, including active-season ranges. Firs
 
 **Done when:** expected player count for scope; spot-checks correct; idempotent.
 
-### Task 6 — Ingest roster memberships (core crawl)  `[ ]`
-For each team × season in scope, fetch roster → `roster_memberships`. Heavy, rate-limited, **resumable** (track completed (team, season) pairs, skip on restart). Keep raw data permanently.
+### Task 6 — Ingest roster memberships (core crawl)  `[x]`  ✅ DONE
+For each team × season in scope, fetch roster → `roster_memberships`. Heavy, rate-limited, **resumable**. Keep raw data permanently.
+
+**Design (settled):** crawl the 30 current franchise ids × seasons 1990–2025 (ids persist across relocations → covers franchise history, no FK gap in scope). **Resumability = idempotency + a done-set:** a `roster_fetch_log(team_id, season, player_count, fetched_at)` ledger, written one row per success **in the same transaction** as the memberships and committed per-pair. Restart loads the set and skips done pairs (`remaining = plan - completed`); a pair that fails after retries is logged + skipped (not recorded → retried later). `player_count` distinguishes "done but empty" (expansion team pre-founding) from "never attempted".
+
+- `[x]` 6.1 Scope + season format — 1990–2025; `season_to_api_str` (1990→"1990-91", century rollover handled)
+- `[x]` 6.2 Resumability design — `roster_fetch_log` ledger + per-pair commit (gating, settled)
+- `[x]` 6.3 `fetch_roster(team_id, season)` — through `fetch()`, parses `PLAYER_ID`s
+- `[x]` 6.4 `upsert_memberships` — composite-PK `ON CONFLICT DO NOTHING`; `record_fetch` breadcrumb; `completed_pairs` loader
+- `[x]` 6.5 `crawl_rosters` loop — skip done, fetch→upsert→record→commit, skip-and-continue on `NBAFetchError`
+- `[x]` 6.6 Runner `scripts/ingest_rosters.py` + `make ingest-rosters`
+- `[x]` 6.7 Ran crawl to completion: 1080/1080 pairs, 15,655 memberships; mid-run kill twice (Ctrl-C + FK crash) both resumed cleanly; 24 empty pairs (pre-founding expansion seasons)
+- `[x]` 6.8 Unit tests (`tests/test_rosters.py`) — season format, parse, batch upsert, skip-completed + error-continue, backfill-on-success
+
+**Note — data-quality finding:** `CommonAllPlayers` is not exhaustive; 4 players appeared on rosters but were missing from it. The `roster_memberships` → `players` FK *caught* this (loud crash, not silent corruption). Fixed with `backfill_players` (upsert id+name from the roster, `ON CONFLICT DO NOTHING` to preserve existing season data). Players grew 5,126 → 5,130.
+
 **Done when:** every in-scope (team, season) fetched; mid-run kill + restart resumes cleanly; a known roster spot-checks correct.
 
 ### Task 7 — Derive edges from roster memberships  `[ ]`

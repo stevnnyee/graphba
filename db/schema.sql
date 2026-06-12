@@ -21,6 +21,19 @@ CREATE TABLE IF NOT EXISTS roster_memberships (
     PRIMARY KEY (player_id, team_id, season)
 );
 
+-- Resumability ledger for the roster crawl: one row per (team, season) that
+-- has been successfully fetched, written in the SAME transaction as its
+-- memberships. On restart the crawl loads this set and skips what's done.
+-- player_count records the result (incl. 0 for teams that didn't exist yet),
+-- so "done but empty" is distinguishable from "never attempted".
+CREATE TABLE IF NOT EXISTS roster_fetch_log (
+    team_id      BIGINT      NOT NULL REFERENCES teams(id),
+    season       INT         NOT NULL,
+    player_count INT         NOT NULL,
+    fetched_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (team_id, season)
+);
+
 -- Derived from roster_memberships. CHECK + PK enforce one canonical row per pair.
 CREATE TABLE IF NOT EXISTS edges (
     player_a_id    BIGINT NOT NULL REFERENCES players(id),

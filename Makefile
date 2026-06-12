@@ -38,6 +38,9 @@ ingest-teams: ## Ingest NBA teams into the database (idempotent)
 ingest-players: ## Ingest the NBA player universe into the database (idempotent)
 	python -m scripts.ingest_players
 
+ingest-rosters: ## Crawl team rosters into the database (resumable, long-running)
+	python -m scripts.ingest_rosters
+
 schema: ## Apply db/schema.sql to the database
 	docker exec -i graphba-db psql -U graphba -d graphba < db/schema.sql
 
@@ -53,4 +56,4 @@ lint: ## Check code with ruff (lint + import order)
 format: ## Auto-format code with ruff
 	ruff format .
 
-.PHONY: help up down reset ps logs psql install freeze healthcheck ingest-teams ingest-players schema test test-live lint format
+.PHONY: help up down reset ps logs psql install freeze healthcheck ingest-teams ingest-players ingest-rosters schema test test-live lint format
