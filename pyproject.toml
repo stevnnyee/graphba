@@ -1,3 +1,12 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# --strict-markers: error on an unregistered marker (catches typos like
+# @pytest.mark.integraton instead of silently treating it as a new marker).
+addopts = "--strict-markers"
+markers = [
+    "integration: test makes a real network call to stats.nba.com",
+]
+
 [tool.ruff]
 line-length = 88
 target-version = "py39"
