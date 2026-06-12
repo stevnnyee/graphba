@@ -66,8 +66,18 @@ Populate `teams`. Smallest real ingestion — first parse → upsert → DB pipe
 
 **Done when:** `teams` populated; counts/abbreviations match reality; re-run is idempotent.
 
-### Task 5 — Ingest the player universe  `[ ]`
-Populate `players` from `CommonAllPlayers`, including active-season ranges.
+### Task 5 — Ingest the player universe  `[x]`  ✅ DONE
+Populate `players` from `CommonAllPlayers`, including active-season ranges. First ingest that hits the **live API through the resilient wrapper**.
+
+**Decisions (settled):** ingest **all ~5,100 players** (`is_only_current_season=0`) — full history, no scope filter; players is one cheap call and pathfinding needs every node (scope limiting is a Task 6 / roster concern). `FROM_YEAR`/`TO_YEAR` are plain 4-digit year strings (`'1990'`) → `int()`, blank → `None`. Parse via `get_normalized_dict()` (bind by field name, not position). Single atomic fetch → on `NBAFetchError`, let the runner crash (no partial rows to salvage).
+
+- `[x]` 5.1 Spike `CommonAllPlayers` — confirmed 5,126 rows, field names, year format (plain 4-digit strings)
+- `[x]` 5.2 `ingest/players.py` — `Player` dataclass + `fetch_players()` through the wrapper; year→int with blank→None guard
+- `[x]` 5.3 `upsert_players(conn, players)` — idempotent `ON CONFLICT (id) DO UPDATE`, batched
+- `[x]` 5.4 Runner `scripts/ingest_players.py` + `make ingest-players`
+- `[x]` 5.5 Verified: 5,126 players; LeBron 2544 = 2003→2025; 0 NULL years; ran twice, count stayed 5,126
+- `[x]` 5.6 Unit tests (`tests/test_players.py`) — parse + year conversion (incl. blank→None) + batched upsert
+
 **Done when:** expected player count for scope; spot-checks correct; idempotent.
 
 ### Task 6 — Ingest roster memberships (core crawl)  `[ ]`
