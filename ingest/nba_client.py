@@ -13,6 +13,8 @@ from typing import TypeVar
 import requests
 from nba_api.stats.endpoints._base import Endpoint
 
+from ingest.exceptions import NBAFetchError
+
 logger = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT = 30  # seconds before giving up on a hung request
@@ -51,6 +53,6 @@ def fetch(endpoint_cls: type[E], **params) -> E:
             )
             time.sleep(wait)
 
-    raise RuntimeError(
+    raise NBAFetchError(
         f"nba_api {endpoint_cls.__name__} failed after {MAX_RETRIES} attempts"
     ) from last_error

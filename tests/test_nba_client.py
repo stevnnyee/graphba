@@ -10,6 +10,7 @@ import pytest
 import requests
 
 from ingest import nba_client
+from ingest.exceptions import NBAFetchError
 from ingest.nba_client import (
     MAX_RETRIES,
     REQUEST_TIMEOUT,
@@ -62,7 +63,7 @@ def test_retries_transient_error_then_succeeds():
 def test_raises_after_max_retries():
     cls = fake_endpoint(*[requests.exceptions.ConnectionError()] * MAX_RETRIES)
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(NBAFetchError):
         fetch(cls)
 
     assert cls.call_count == MAX_RETRIES
@@ -80,7 +81,7 @@ def test_non_retryable_error_propagates_immediately():
 def test_backoff_grows_exponentially(no_sleep):
     cls = fake_endpoint(*[requests.exceptions.ConnectionError()] * MAX_RETRIES)
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(NBAFetchError):
         fetch(cls)
 
     # sleep calls alternate: polite delay, then backoff, per attempt.
