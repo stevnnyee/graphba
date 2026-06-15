@@ -9,7 +9,7 @@ is built to survive interruption:
   A restart loads the completed set and skips it (see `crawl_rosters`).
 - **Idempotent:** re-fetching a pair is harmless (composite-PK upsert).
 - **Fault-tolerant:** a pair that fails after retries is logged and skipped; it
-  isn't marked done, so a later run retries it.
+  isn't marked done, so a later run retries it.dfs
 """
 
 from __future__ import annotations
