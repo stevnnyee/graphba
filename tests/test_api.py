@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.main import app, get_db
+from backend.main import app, get_db, get_graph
 from backend.schemas import (
     Graph,
     Link,
@@ -132,3 +132,42 @@ def test_connections_rejects_oversized_limit(client):
     assert (
         client.get("/players/1/connections", params={"limit": 9999}).status_code == 422
     )
+
+
+def test_path_found_enriches_chain(client):
+    # Toy graph supplies the per-hop seasons; shortest_path/names are patched.
+    graph = {1: {2: (2010, 2011)}, 2: {1: (2010, 2011), 3: (2015,)}, 3: {2: (2015,)}}
+    app.dependency_overrides[get_graph] = lambda: graph
+    with (
+        patch("backend.main.shortest_path", return_value=[1, 2, 3]),
+        patch("backend.main.fetch_player_names", return_value={1: "A", 2: "B", 3: "C"}),
+    ):
+        resp = client.get("/path", params={"from": 1, "to": 3})
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "found": True,
+        "nodes": [
+            {"id": 1, "name": "A"},
+            {"id": 2, "name": "B"},
+            {"id": 3, "name": "C"},
+        ],
+        "links": [
+            {"source": 1, "target": 2, "seasons": [2010, 2011]},
+            {"source": 2, "target": 3, "seasons": [2015]},
+        ],
+    }
+
+
+def test_path_not_found_is_explicit(client):
+    app.dependency_overrides[get_graph] = lambda: {}
+    with patch("backend.main.shortest_path", return_value=None):
+        resp = client.get("/path", params={"from": 1, "to": 999})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"found": False, "nodes": [], "links": []}
+
+
+def test_path_requires_from_and_to(client):
+    app.dependency_overrides[get_graph] = lambda: {}
+    assert client.get("/path", params={"from": 1}).status_code == 422

@@ -6,6 +6,7 @@ from backend.config import CURRENT_SEASON
 from backend.queries import (
     _escape_like,
     _format_active_years,
+    fetch_player_names,
     get_connections,
     get_player_profile,
     search_players,
@@ -149,3 +150,16 @@ def test_get_connections_none_when_focus_missing():
 
     assert get_connections(conn, 999999, limit=25) is None
     cur.fetchall.assert_not_called()
+
+
+def test_fetch_player_names_maps_ids_to_names():
+    cur = MagicMock()
+    cur.fetchall.return_value = [(2544, "LeBron James"), (201939, "Stephen Curry")]
+    conn = MagicMock()
+    conn.cursor.return_value.__enter__.return_value = cur
+
+    names = fetch_player_names(conn, [2544, 201939])
+
+    assert names == {2544: "LeBron James", 201939: "Stephen Curry"}
+    _sql, params = cur.execute.call_args.args
+    assert params == {"ids": [2544, 201939]}

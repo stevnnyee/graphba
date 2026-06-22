@@ -134,7 +134,7 @@ Add indexes for known queries; run a read-only data-quality audit.
 
 ---
 
-## Phase 2 — Backend / API Layer  `[~]`
+## Phase 2 — Backend / API Layer  `[x]`  ✅ all four endpoints live (search, profile, connections, path)
 FastAPI endpoints: `GET /players?q=` (typeahead), `GET /players/{id}`, `GET /players/{id}/connections?depth=` (capped ego network), `GET /path?from=&to=` (ordered nodes + team/season per hop). Optional `season_from`/`season_to` on relevant endpoints. Cache deterministic results. Lock JSON contract: `{nodes: [{id, name, …}], links: [{source, target, seasons}]}`.
 **Decision to finalize first:** year-filter semantics — strict (both in-range) vs cumulative. Leaning strict. *Does not block search or the contract shape — only `/connections` + `/path` traversal. Resolve before building those.*
 
@@ -198,8 +198,22 @@ Lock the wire shapes, then ship the first (cheapest, foundational) endpoint.
 
 **Done when:** `make test` green; endpoint returns capped `{nodes, links}` and the strict era window narrows the neighbor set. ✅
 
-### Task 4 — Pathfinding endpoint  `[ ]`  *(Phase 2 wrapper over Phase 3 BFS — build after Phase 3)*
-`GET /path?from=&to=&season_from=&season_to=` — ordered nodes + per-hop team/season. Loads the cached in-memory graph, calls `shortest_path`, enriches the id chain with names + per-hop metadata, handles unreachable explicitly.
+### Task 4 — Pathfinding endpoint  `[~]`
+`GET /path?from=&to=&season_from=&season_to=` — shortest teammate chain. Reads the cached in-memory graph, calls `shortest_path`, enriches the id chain with names + per-hop seasons.
+
+**Design decisions (settled):**
+- **Response** = `PathResponse{found, nodes, links}` — reuses `Node`/`Link`; `nodes` is the ordered chain, `links` the consecutive hops with seasons. Frontend can render it directly (RFG-compatible).
+- **Unreachable is explicit:** `found: false` + empty lists at **200**, not 404 — both players can exist with no connection (or an id may be unknown/isolated). v1 doesn't distinguish unknown-vs-isolated-vs-disconnected (all → `found: false`); a stricter 404-on-unknown-id check is a possible enhancement.
+- `from`/`to` are reserved-ish param names → Query **aliases** map them to `source`/`target`.
+- **Per-hop team deferred:** edges carry seasons, not team; recovering "which team in season X" needs a `roster_memberships` lookup per hop. v1 ships seasons; team enrichment is a follow-up (like neighbor↔neighbor edges in Task 3).
+
+- `[x]` 4.1 `PathResponse` schema (`backend/schemas.py`)
+- `[x]` 4.2 `fetch_player_names()` enrichment helper (`backend/queries.py`)
+- `[x]` 4.3 `GET /path` route — aliases, BFS call, chain enrichment, explicit `found` (`backend/main.py`)
+- `[x]` 4.4 Tests — names query; route found (enriched chain), not-found (explicit), missing-param 422
+- `[x]` 4.5 Live smoke verified — LeBron→Curry = 2 hops (via Richard Jefferson); strict 2015–2017 window yields a different 3-hop chain (Korver→Bazemore), proving traversal-time filtering. Run `make test`/`lint` to confirm green.
+
+**Done when:** `/path` returns an ordered chain with per-hop seasons; unreachable pairs return `found: false`. ✅
 
 ## Phase 3 — Graph / Algorithm Layer  `[~]`
 Full graph in memory. BFS → bidirectional BFS. Path reconstruction with hop metadata. Year filter applied at traversal time (skip out-of-range edges; no pre-built snapshots). Handle disconnected/unreachable pairs explicitly.
@@ -215,7 +229,7 @@ Full graph in memory. BFS → bidirectional BFS. Path reconstruction with hop me
 - `[x]` 3.3 Tests (`tests/test_graph.py`) — build (both directions, sorted), direct/multi-hop/same-node/unknown/isolated, window blocks out-of-range edge
 - `[ ]` 3.4 Run `make test`/`format`/`lint`; spot-check a real path (e.g. a known 2–3 hop pair) via a quick probe
 - `[ ]` 3.5 Optimize to **bidirectional BFS** (search from both ends, meet in the middle) once plain BFS is confirmed correct; keep plain version's tests green
-- `[ ]` 3.6 Decide graph load/caching strategy for the app (load once at FastAPI startup via lifespan; rebuild trigger TBD) — needed by Task 4
+- `[x]` 3.6 Graph caching — loaded once at FastAPI startup via `lifespan` onto `app.state.graph`; `get_graph` dependency serves it (overridable in tests). Rebuild-while-running trigger deferred (graph is static between ingests; restart to refresh).
 
 ## Phase 4 — Frontend Layer  `[ ]`
 Next.js App Router. Graph canvas (client component) + search/command bar + path panel. Default to a featured player's ego network. Click node → fetch connections, merge, highlight/dim. Path mode → `/path`, render only the chain, animate (Framer Motion), label links with team/season. 2D over 3D. Year range slider. Light state.

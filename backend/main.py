@@ -6,18 +6,45 @@ ingest/ and scripts/ and is entirely separate from this app.
 Run locally: ``make api`` (uvicorn with auto-reload).
 """
 
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager
 from typing import Annotated, Optional
 
 import psycopg
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.database import get_connection
-from backend.queries import get_connections, get_player_profile, search_players
-from backend.schemas import Graph, PlayerProfile, PlayerSearchResult
+from backend.graph import Adjacency, build_graph, shortest_path
+from backend.queries import (
+    fetch_player_names,
+    get_connections,
+    get_player_profile,
+    search_players,
+)
+from backend.schemas import (
+    Graph,
+    Link,
+    Node,
+    PathResponse,
+    PlayerProfile,
+    PlayerSearchResult,
+)
 
-app = FastAPI(title="GraphBA API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Load the full player graph into memory once, at startup.
+
+    Pathfinding runs against the complete graph every request, so it can't be
+    rebuilt per call (79k edges). It's held on app.state for the process lifetime.
+    """
+    with get_connection() as conn:
+        app.state.graph = build_graph(conn)
+    yield
+
+
+app = FastAPI(title="GraphBA API", lifespan=lifespan)
 
 # The frontend is a separate origin (Next.js on :3000 in dev, Vercel in prod).
 # Tighten this allowlist to real origins before deploying (Phase 5).
@@ -33,6 +60,11 @@ def get_db() -> Iterator[psycopg.Connection]:
     """Per-request DB connection. Overridable in tests to avoid a real DB."""
     with get_connection() as conn:
         yield conn
+
+
+def get_graph(request: Request) -> Adjacency:
+    """The in-memory graph loaded at startup. Overridable in tests."""
+    return request.app.state.graph
 
 
 @app.get("/health")
@@ -75,3 +107,34 @@ def player_connections_route(
     if graph is None:
         raise HTTPException(status_code=404, detail="Player not found")
     return graph
+
+
+@app.get("/path", response_model=PathResponse)
+def path_route(
+    conn: Annotated[psycopg.Connection, Depends(get_db)],
+    graph: Annotated[Adjacency, Depends(get_graph)],
+    source: Annotated[int, Query(alias="from", description="Start player id")],
+    target: Annotated[int, Query(alias="to", description="End player id")],
+    season_from: Annotated[Optional[int], Query(description="Era window start")] = None,
+    season_to: Annotated[Optional[int], Query(description="Era window end")] = None,
+) -> PathResponse:
+    """Shortest teammate chain between two players, with per-hop seasons.
+
+    Returns ``found: false`` (empty chain) when no path exists or an id is
+    unknown/isolated — both players existing is not a guarantee of a connection.
+    """
+    path = shortest_path(graph, source, target, season_from, season_to)
+    if path is None:
+        return PathResponse(found=False, nodes=[], links=[])
+
+    names = fetch_player_names(conn, path)
+    nodes = [Node(id=pid, name=names[pid]) for pid in path]
+    links = [
+        Link(
+            source=path[i],
+            target=path[i + 1],
+            seasons=list(graph[path[i]][path[i + 1]]),
+        )
+        for i in range(len(path) - 1)
+    ]
+    return PathResponse(found=True, nodes=nodes, links=links)

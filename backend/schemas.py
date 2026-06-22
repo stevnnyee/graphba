@@ -77,3 +77,17 @@ class Graph(BaseModel):
 
     nodes: list[Node]
     links: list[Link]
+
+
+class PathResponse(BaseModel):
+    """A shortest path between two players.
+
+    ``nodes`` is the chain in order (source → … → target); ``links`` are the
+    consecutive hops, each carrying the seasons that connect them. ``found`` is
+    explicit so an unreachable pair (no path, or an unknown/isolated id) is a
+    clear 200 with ``found: false`` and empty lists — not an ambiguous empty graph.
+    """
+
+    found: bool
+    nodes: list[Node]
+    links: list[Link]

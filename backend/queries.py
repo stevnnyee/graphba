@@ -204,3 +204,14 @@ def get_connections(
         nodes.append(Node(id=neighbor_id, name=name))
         links.append(Link(source=focus_id, target=neighbor_id, seasons=seasons))
     return Graph(nodes=nodes, links=links)
+
+
+# Cast to bigint[] to match the BIGINT id column (avoid int-array type mismatch).
+_NAMES_SQL = "SELECT id, full_name FROM players WHERE id = ANY(%(ids)s::bigint[])"
+
+
+def fetch_player_names(conn: psycopg.Connection, ids: list[int]) -> dict[int, str]:
+    """Map player ids to names — used to enrich a bare BFS id-chain into nodes."""
+    with conn.cursor() as cur:
+        cur.execute(_NAMES_SQL, {"ids": list(ids)})
+        return {row[0]: row[1] for row in cur.fetchall()}
