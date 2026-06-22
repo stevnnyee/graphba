@@ -134,9 +134,54 @@ Add indexes for known queries; run a read-only data-quality audit.
 
 ---
 
-## Phase 2 — Backend / API Layer  `[ ]`
+## Phase 2 — Backend / API Layer  `[~]`
 FastAPI endpoints: `GET /players?q=` (typeahead), `GET /players/{id}`, `GET /players/{id}/connections?depth=` (capped ego network), `GET /path?from=&to=` (ordered nodes + team/season per hop). Optional `season_from`/`season_to` on relevant endpoints. Cache deterministic results. Lock JSON contract: `{nodes: [{id, name, …}], links: [{source, target, seasons}]}`.
-**Decision to finalize first:** year-filter semantics — strict (both in-range) vs cumulative. Leaning strict.
+**Decision to finalize first:** year-filter semantics — strict (both in-range) vs cumulative. Leaning strict. *Does not block search or the contract shape — only `/connections` + `/path` traversal. Resolve before building those.*
+
+### Task 1 — JSON contract + player search endpoint  `[x]`
+Lock the wire shapes, then ship the first (cheapest, foundational) endpoint.
+
+**Design decisions (settled):**
+- **Graph contract** uses `links: [{source, target, seasons}]` — generic graph-theory terms (also what React Force Graph consumes), not the DB's `player_a_id`/`player_b_id`. Wire format is shaped for the consumer; column names stay internal. The `player_a_id → source` mapping happens once, in the serializer.
+- **Search result is its own lightweight shape**, NOT the graph node: `{id, name, active_years}`. Decoupled (a node-shape change must not bloat the typeahead), and cheap (fires per keystroke).
+- **Disambiguator = era**, formatted `active_years` ("1990–2007", "2016–present"). Distinguishes same-named players (Gary Payton vs Gary Payton II). Seasons are INT start-years in the DB → formatted to a display string in the backend serializer (`CURRENT_SEASON` → "present").
+- **Matching** = substring `ILIKE '%q%'` (accelerated by the Phase 1 `pg_trgm` GIN index) for "match-anywhere, Google-like" feel; **ranked** by `similarity(full_name, q) DESC` so the best match leads. LIKE wildcards in user input are escaped.
+- **Guards:** `q` min length 2 (no match-everything on one keystroke); server-side `limit` (default 8, cap 25) — the cap is the API's call, not the client's.
+
+- `[x]` 1.1 Lock graph contract — `Node`/`Link`/`Graph` (`backend/schemas.py`)
+- `[x]` 1.2 Lock search result shape — `PlayerSearchResult` (`backend/schemas.py`)
+- `[x]` 1.3 FastAPI app skeleton — `backend/main.py` (app, CORS placeholder, `/health`), `make api`
+- `[x]` 1.4 Query layer — `search_players()` + `_format_active_years()` (`backend/queries.py`)
+- `[x]` 1.5 `GET /players?q=&limit=` route — validation + dependency-injected DB connection
+- `[x]` 1.6 Tests — `tests/test_queries.py` (mapping + formatting + wildcard escape) and `tests/test_api.py` (routing, validation, serialization)
+- `[x]` 1.7 Installed deps (`fastapi`, `uvicorn[standard]`, `httpx`) → `make freeze`; `make test`/`lint` green; live smoke `GET /players?q=curry` returns prominence-ranked rows (Stephen Curry #1)
+
+**Done when:** `make test` green; `make api` serves `GET /players?q=curry` returning ranked `{id, name, active_years}` rows from the real DB. ✅
+
+**Ranking note (settled):** filter = substring `ILIKE` (pg_trgm-accelerated); rank = **weighted degree** = `sum(shared_seasons)` over a player's edges (teammate-seasons), tie-broken by trigram `similarity` then name. Plain `count(*)` degree was rejected — it rewards journeymen (Seth Curry > Stephen Curry); the weighted sum favors tenure. Computed per-request (ILIKE filters to a handful first). *Future optimization if typeahead slows: materialize as a `players.weighted_degree` column refreshed by `derive_edges`.*
+
+### Task 2 — Player profile endpoint  `[~]`
+`GET /players/{id}` — the detail-panel view of one player. 404 on unknown id.
+
+**Design decisions (settled):**
+- **Profile gets its own richer shape** (`PlayerProfile`), NOT the graph `Node`: the panel renders one player and has room for attributes + summary scalars.
+- **Boundary — profile vs `/connections`:** profile answers *"who is this player?"* → attributes + scalars (`id`, `name`, `active_years`, `teams`, `connection_count`). The teammate *list* (and its graph payload) is `/connections`' job — different question, different size class, different shape. "Top teammates" deferred to `/connections?limit=N` to avoid overlap.
+- `connection_count` = plain distinct-teammate count (incident edges), the panel's "N connections" scalar — distinct from search's *weighted* degree (a ranking signal, not a displayed number).
+- `teams` = `TeamRef{id, abbreviation, name}` deduped from `roster_memberships`.
+
+- `[x]` 2.1 `PlayerProfile` + `TeamRef` schemas (`backend/schemas.py`)
+- `[x]` 2.2 Query layer — `get_player_profile()` returns `PlayerProfile | None` (`backend/queries.py`)
+- `[x]` 2.3 `GET /players/{player_id}` route — 404 via `HTTPException` when None
+- `[x]` 2.4 Tests — query (assembly + None-on-missing) and route (serialization, 404, non-int id → 422)
+- `[ ]` 2.5 Run `make test`/`format`/`lint`; live smoke `GET /players/201939` (Stephen Curry)
+
+**Done when:** `make test` green; `make api` serves `GET /players/{id}` returning the profile, 404 on unknown id.
+
+### Task 3 — Capped ego-network endpoint  `[ ]`  *(needs year-filter semantics finalized)*
+`GET /players/{id}/connections` — returns the graph contract `{nodes, links}` for the player's neighborhood, capped for display.
+
+### Task 4 — Pathfinding endpoint  `[ ]`
+`GET /path?from=&to=` — ordered nodes + per-hop team/season. Thin wrapper over Phase 3's BFS.
 
 ## Phase 3 — Graph / Algorithm Layer  `[ ]`
 Full graph in memory. BFS → bidirectional BFS. Path reconstruction with hop metadata. Year filter applied at traversal time (skip out-of-range edges; no pre-built snapshots). Handle disconnected/unreachable pairs explicitly.

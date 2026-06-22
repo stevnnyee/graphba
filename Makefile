@@ -50,6 +50,9 @@ validate: ## Run read-only data-quality audit queries and print a report
 schema: ## Apply db/schema.sql to the database
 	docker exec -i graphba-db psql -U graphba -d graphba < db/schema.sql
 
+api: ## Run the FastAPI dev server (auto-reload) on :8000
+	python -m uvicorn backend.main:app --reload
+
 test: ## Run unit tests (mocked, no network)
 	pytest
 
@@ -62,4 +65,4 @@ lint: ## Check code with ruff (lint + import order)
 format: ## Auto-format code with ruff
 	ruff format .
 
-.PHONY: help up down reset ps logs psql install freeze healthcheck ingest-teams ingest-players ingest-rosters derive-edges validate schema test test-live lint format
+.PHONY: help up down reset ps logs psql install freeze healthcheck ingest-teams ingest-players ingest-rosters derive-edges validate schema api test test-live lint format

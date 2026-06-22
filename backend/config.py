@@ -1,6 +1,9 @@
 """Application configuration loaded from environment variables."""
 
+from __future__ import annotations
+
 import os
+from datetime import date
 
 from dotenv import load_dotenv
 
@@ -15,3 +18,17 @@ if not DATABASE_URL:
         "DATABASE_URL is not set. Copy .env.example to .env (or set the "
         "variable in your environment) before running."
     )
+
+
+def _current_season_start_year(today: date | None = None) -> int:
+    """NBA season start-year for a date (1990 == the 1990-91 season).
+
+    A season tips off in October, so before October the current season is still
+    the one that started the previous calendar year.
+    """
+    today = today or date.today()
+    return today.year if today.month >= 10 else today.year - 1
+
+
+# Used to render a still-active player's range as "<from>–present".
+CURRENT_SEASON = _current_season_start_year()
