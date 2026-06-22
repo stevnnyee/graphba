@@ -194,15 +194,28 @@ Lock the wire shapes, then ship the first (cheapest, foundational) endpoint.
 - `[x]` 3.3 Query layer — `get_connections()` returns `Graph | None` (`backend/queries.py`)
 - `[x]` 3.4 `GET /players/{id}/connections` route — `limit` + optional `season_from`/`season_to` (`backend/main.py`)
 - `[x]` 3.5 Tests — query (graph assembly, strict window, None-on-missing) and route (serialization, window pass-through, 404, limit cap)
-- `[ ]` 3.6 Apply schema (`make schema` — creates the GIN index); run `make test`/`format`/`lint`; live smoke `GET /players/201939/connections?season_from=2015&season_to=2017`
+- `[x]` 3.6 Applied schema (GIN index); live smoke verified — 2015–2017 window narrows Curry's neighbors to dynasty-era teammates (incl. KD). *Bug found+fixed: psycopg adapts a small-int list as `smallint[]`; column is `integer[]` and there's no `integer[] && smallint[]` operator → cast the param `::int[]`.*
 
-**Done when:** `make test` green; endpoint returns capped `{nodes, links}` and the strict era window narrows the neighbor set.
+**Done when:** `make test` green; endpoint returns capped `{nodes, links}` and the strict era window narrows the neighbor set. ✅
 
-### Task 4 — Pathfinding endpoint  `[ ]`
-`GET /path?from=&to=` — ordered nodes + per-hop team/season. Thin wrapper over Phase 3's BFS.
+### Task 4 — Pathfinding endpoint  `[ ]`  *(Phase 2 wrapper over Phase 3 BFS — build after Phase 3)*
+`GET /path?from=&to=&season_from=&season_to=` — ordered nodes + per-hop team/season. Loads the cached in-memory graph, calls `shortest_path`, enriches the id chain with names + per-hop metadata, handles unreachable explicitly.
 
-## Phase 3 — Graph / Algorithm Layer  `[ ]`
+## Phase 3 — Graph / Algorithm Layer  `[~]`
 Full graph in memory. BFS → bidirectional BFS. Path reconstruction with hop metadata. Year filter applied at traversal time (skip out-of-range edges; no pre-built snapshots). Handle disconnected/unreachable pairs explicitly.
+
+**Design decisions (settled):**
+- **Pure algorithm.** `backend/graph.py` operates on player ids + an adjacency map only — no names/teams/HTTP. Enrichment (names, per-hop team/season) is the serving layer's job → BFS stays unit-testable on toy graphs.
+- **Representation** = `Adjacency = dict[int, dict[int, tuple[int,...]]]` (node → neighbor → shared seasons). Dict-of-dict gives O(1) edge lookup for both traversal and later hop annotation. Edges stored canonically (a<b) are inserted under *both* endpoints (undirected traversal).
+- **BFS, not Dijkstra** — unweighted (every hop costs the same). Predecessor map → reconstruct. `[source]` when source==target; `None` when either id absent (unknown/isolated) or no path.
+- **Year filter at traversal** (strict): skip an edge unless its sorted seasons tuple overlaps `[from,to]`; open bounds default to `MIN_SEASON`/`CURRENT_SEASON`. No per-window snapshots.
+
+- `[x]` 3.1 `build_graph(conn)` — load all edges into in-memory adjacency (both directions, seasons sorted)
+- `[x]` 3.2 `shortest_path()` — BFS + predecessor reconstruction + strict year filter + unreachable→None
+- `[x]` 3.3 Tests (`tests/test_graph.py`) — build (both directions, sorted), direct/multi-hop/same-node/unknown/isolated, window blocks out-of-range edge
+- `[ ]` 3.4 Run `make test`/`format`/`lint`; spot-check a real path (e.g. a known 2–3 hop pair) via a quick probe
+- `[ ]` 3.5 Optimize to **bidirectional BFS** (search from both ends, meet in the middle) once plain BFS is confirmed correct; keep plain version's tests green
+- `[ ]` 3.6 Decide graph load/caching strategy for the app (load once at FastAPI startup via lifespan; rebuild trigger TBD) — needed by Task 4
 
 ## Phase 4 — Frontend Layer  `[ ]`
 Next.js App Router. Graph canvas (client component) + search/command bar + path panel. Default to a featured player's ego network. Click node → fetch connections, merge, highlight/dim. Path mode → `/path`, render only the chain, animate (Framer Motion), label links with team/season. 2D over 3D. Year range slider. Light state.
