@@ -65,7 +65,10 @@ export default function Home() {
     if (mode !== "path" || !pathFrom || !pathTo) return;
     let cancelled = false;
     (async () => {
-      const r = await getPath(pathFrom.id, pathTo.id, { from: fromYear, to: toYear });
+      const r = await getPath(pathFrom.id, pathTo.id, {
+        from: fromYear,
+        to: toYear,
+      });
       if (!cancelled) {
         setPath(r);
         setGraph({ nodes: r.nodes, links: r.links });
@@ -105,7 +108,7 @@ export default function Home() {
       />
 
       {/* Brand */}
-      <div className="pointer-events-none absolute left-5 top-5 z-10">
+      <div className="pointer-events-none absolute top-5 left-5 z-10">
         <h1 className="text-sm font-bold tracking-tight">
           Graph<span className="text-accent">BA</span>
         </h1>
@@ -113,7 +116,7 @@ export default function Home() {
       </div>
 
       {/* Top-center controls */}
-      <div className="absolute left-1/2 top-5 z-20 w-[min(92vw,460px)] -translate-x-1/2">
+      <div className="absolute top-5 left-1/2 z-20 w-[min(92vw,460px)] -translate-x-1/2">
         <div className="mb-3 flex justify-center">
           <div className="glass flex rounded-full p-1 text-xs">
             {(["explore", "path"] as Mode[]).map((m) => (
@@ -122,7 +125,9 @@ export default function Home() {
                 type="button"
                 onClick={() => switchMode(m)}
                 className={`rounded-full px-4 py-1.5 capitalize transition ${
-                  mode === m ? "bg-accent/20 text-accent" : "text-white/50 hover:text-white/80"
+                  mode === m
+                    ? "bg-accent/20 text-accent"
+                    : "text-white/50 hover:text-white/80"
                 }`}
               >
                 {m === "path" ? "Find path" : "Explore"}
@@ -148,7 +153,9 @@ export default function Home() {
       </div>
 
       {mode === "explore" && <ProfilePanel profile={profile} />}
-      {mode === "path" && <PathPanel path={path} onClear={() => switchMode("explore")} />}
+      {mode === "path" && (
+        <PathPanel path={path} onClear={() => switchMode("explore")} />
+      )}
 
       <EraSlider
         min={MIN_SEASON}

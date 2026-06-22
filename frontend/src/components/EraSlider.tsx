@@ -14,8 +14,8 @@ export default function EraSlider({ min, max, from, to, onChange }: Props) {
   return (
     <div className="glass pointer-events-auto absolute bottom-5 left-1/2 z-10 w-[min(90vw,560px)] -translate-x-1/2 rounded-2xl px-6 py-4">
       <div className="mb-2.5 flex items-center justify-between text-xs">
-        <span className="uppercase tracking-wider text-white/40">Era</span>
-        <span className="font-semibold text-accent">
+        <span className="tracking-wider text-white/40 uppercase">Era</span>
+        <span className="text-accent font-semibold">
           {from} – {to}
         </span>
       </div>
@@ -23,7 +23,7 @@ export default function EraSlider({ min, max, from, to, onChange }: Props) {
       <div className="relative h-5">
         <div className="absolute top-1/2 h-1 w-full -translate-y-1/2 rounded-full bg-white/10" />
         <div
-          className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-accent"
+          className="bg-accent absolute top-1/2 h-1 -translate-y-1/2 rounded-full"
           style={{ left: `${pct(from)}%`, right: `${100 - pct(to)}%` }}
         />
         <input
@@ -40,7 +40,9 @@ export default function EraSlider({ min, max, from, to, onChange }: Props) {
           min={min}
           max={max}
           value={to}
-          onChange={(e) => onChange(from, Math.max(Number(e.target.value), from))}
+          onChange={(e) =>
+            onChange(from, Math.max(Number(e.target.value), from))
+          }
         />
       </div>
     </div>

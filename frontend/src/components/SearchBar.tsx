@@ -75,7 +75,7 @@ export default function SearchBar({
           }
         }}
         placeholder={placeholder}
-        className="glass w-full rounded-xl px-4 py-3 text-sm text-foreground outline-none transition placeholder:text-white/45 focus:ring-2 focus:ring-accent/60"
+        className="glass text-foreground focus:ring-accent/60 w-full rounded-xl px-4 py-3 text-sm transition outline-none placeholder:text-white/45 focus:ring-2"
       />
       {open && results.length > 0 && (
         <ul className="glass absolute z-30 mt-2 w-full overflow-hidden rounded-xl">

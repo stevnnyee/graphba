@@ -11,9 +11,12 @@ const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
   ssr: false,
 }) as any;
 
-const GRAY = "#8b93a7";
-const ACCENT = "#ff7a18";
-const PATH = "#ffb066";
+// Glossy-sphere colour stops [highlight, mid, rim] per node role.
+function palette(isFocus: boolean, inPath: boolean): [string, string, string] {
+  if (isFocus) return ["#ffe2c2", "#ff8a2a", "#c2540c"]; // orange — focus
+  if (inPath) return ["#ffeede", "#ffb066", "#d77f2e"]; // light orange — path
+  return ["#eaf6ff", "#6bb4ec", "#2b6aa0"]; // light blue — everyone else
+}
 
 interface Props {
   data: Graph;
@@ -77,7 +80,8 @@ export default function GraphCanvas({
     shouldFitRef.current = true;
   }, [graphData]);
 
-  const radius = (id: number) => 3 + Math.min(9, Math.sqrt(degree.get(id) ?? 1) * 1.7);
+  const radius = (id: number) =>
+    4 + Math.min(11, Math.sqrt(degree.get(id) ?? 1) * 1.9);
 
   return (
     <div ref={wrapRef} className="absolute inset-0">
@@ -101,44 +105,90 @@ export default function GraphCanvas({
           onNodeClick={(n: any) => onNodeClick(n.id)}
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           linkColor={(l: any) =>
-            pathIds && pathIds.has(endpointId(l.source)) && pathIds.has(endpointId(l.target))
+            pathIds &&
+            pathIds.has(endpointId(l.source)) &&
+            pathIds.has(endpointId(l.target))
               ? "rgba(255,122,24,0.9)"
-              : "rgba(255,255,255,0.1)"
+              : "rgba(140,180,225,0.16)"
           }
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           linkWidth={(l: any) =>
-            pathIds && pathIds.has(endpointId(l.source)) && pathIds.has(endpointId(l.target))
+            pathIds &&
+            pathIds.has(endpointId(l.source)) &&
+            pathIds.has(endpointId(l.target))
               ? 2.5
               : 1
           }
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, scale: number) => {
+          nodeCanvasObject={(
+            node: any,
+            ctx: CanvasRenderingContext2D,
+            scale: number,
+          ) => {
+            // Before the sim assigns positions, x/y are undefined → skip.
+            if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
             const r = radius(node.id);
             const isFocus = node.id === focusId;
-            const inPath = pathIds?.has(node.id);
-            const color = isFocus ? ACCENT : inPath ? PATH : GRAY;
+            const inPath = pathIds?.has(node.id) ?? false;
+            const [hi, mid, rim] = palette(isFocus, inPath);
 
+            // Soft drop shadow underneath for a floating, 3D feel.
+            ctx.save();
+            ctx.shadowColor = "rgba(0,0,0,0.55)";
+            ctx.shadowBlur = r * 0.9;
+            ctx.shadowOffsetY = r * 0.35;
+            // Radial gradient = lit sphere: bright top-left, dark rim.
+            const sphere = ctx.createRadialGradient(
+              node.x - r * 0.4,
+              node.y - r * 0.4,
+              r * 0.15,
+              node.x,
+              node.y,
+              r,
+            );
+            sphere.addColorStop(0, hi);
+            sphere.addColorStop(0.55, mid);
+            sphere.addColorStop(1, rim);
+            ctx.fillStyle = sphere;
             ctx.beginPath();
             ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
-            if (isFocus || inPath) {
-              ctx.shadowColor = ACCENT;
-              ctx.shadowBlur = 16;
-            }
-            ctx.fillStyle = color;
             ctx.fill();
-            ctx.shadowBlur = 0;
+            ctx.restore();
+
+            // Glossy specular glint (top-left), drawn without the shadow.
+            ctx.beginPath();
+            ctx.arc(
+              node.x - r * 0.32,
+              node.y - r * 0.32,
+              r * 0.26,
+              0,
+              2 * Math.PI,
+            );
+            ctx.fillStyle = "rgba(255,255,255,0.5)";
+            ctx.fill();
 
             if (scale > 1.3 || isFocus || inPath) {
               const fontSize = Math.max(10 / scale, 2.5);
-              ctx.font = `${fontSize}px system-ui, sans-serif`;
+              ctx.font = `600 ${fontSize}px system-ui, sans-serif`;
               ctx.textAlign = "center";
               ctx.textBaseline = "top";
-              ctx.fillStyle = "rgba(231,233,238,0.92)";
-              ctx.fillText(node.name, node.x, node.y + r + 1.5);
+              const labelY = node.y + r + 2;
+              // Dark halo so the label stays legible whether it lands over a
+              // light sphere or the dark canvas.
+              ctx.lineJoin = "round";
+              ctx.lineWidth = fontSize * 0.5;
+              ctx.strokeStyle = "rgba(4,7,11,0.9)";
+              ctx.strokeText(node.name, node.x, labelY);
+              ctx.fillStyle = "#f4e4c1"; // warm cream — not white
+              ctx.fillText(node.name, node.x, labelY);
             }
           }}
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          nodePointerAreaPaint={(node: any, color: string, ctx: CanvasRenderingContext2D) => {
+          nodePointerAreaPaint={(
+            node: any,
+            color: string,
+            ctx: CanvasRenderingContext2D,
+          ) => {
             ctx.fillStyle = color;
             ctx.beginPath();
             ctx.arc(node.x, node.y, radius(node.id) + 2, 0, 2 * Math.PI);

@@ -17,7 +17,7 @@ export default function PathPanel({ path, onClear }: Props) {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 24, opacity: 0 }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
-          className="glass pointer-events-auto absolute left-4 top-28 z-10 w-80 rounded-2xl p-5"
+          className="glass pointer-events-auto absolute top-28 left-4 z-10 w-80 rounded-2xl p-5"
         >
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">
@@ -44,10 +44,12 @@ export default function PathPanel({ path, onClear }: Props) {
               {path.nodes.map((n, i) => (
                 <li key={n.id}>
                   <div className="flex items-center gap-3">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/15 text-xs font-semibold text-accent">
+                    <span className="bg-accent/15 text-accent flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
                       {i + 1}
                     </span>
-                    <span className="text-sm font-medium">{n.name as string}</span>
+                    <span className="text-sm font-medium">
+                      {n.name as string}
+                    </span>
                   </div>
                   {i < path.links.length && (
                     <div className="ml-3.5 flex items-center py-1.5 pl-5 text-[11px] text-white/40">
