@@ -98,8 +98,17 @@ For each team × season in scope, fetch roster → `roster_memberships`. Heavy, 
 
 **Done when:** every in-scope (team, season) fetched; mid-run kill + restart resumes cleanly; a known roster spot-checks correct.
 
-### Task 7 — Derive edges from roster memberships  `[ ]`
-Separate pass (no API): for each roster, emit every player pair (`a < b`), aggregating `shared_seasons` + connecting seasons/teams.
+### Task 7 — Derive edges from roster memberships  `[x]`  ✅ DONE
+Separate pass (no API): self-join `roster_memberships` on (team_id, season), emit every player pair, aggregate into `edges`.
+
+**Design (settled):** one `INSERT … SELECT` — self-join on `team_id` AND `season` (= teammates); `a.player_id < b.player_id` drops self-pairs + mirror dupes (canonical order, matches the CHECK); `GROUP BY (a,b)` with `count(DISTINCT season)` → `shared_seasons` and `array_agg(DISTINCT season ORDER BY season)` → `seasons`. `edges` is a fully derived cache → **rebuild via TRUNCATE + INSERT** (atomic, drops stale edges).
+
+- `[x]` 7.1 Query design (self-join + `a<b` dedupe + GROUP BY aggregation)
+- `[x]` 7.2 `ingest/edges.py` — `derive_edges(conn)` rebuilds + returns count
+- `[x]` 7.3 Runner `scripts/derive_edges.py` + `make derive-edges`
+- `[x]` 7.4 Verified: 79,488 edges; Curry↔Thompson = 13 seasons (2011–2023); Curry's top teammate Green = 14 seasons; 0 rows violate `a<b` ordering
+- `[x]` 7.5 Unit test (`tests/test_edges.py`) — TRUNCATE-before-INSERT contract + count (SQL correctness proven by 7.4 spot-checks)
+
 **Done when:** `edges` populated; known teammates have an edge with correct seasons; non-overlapping players have none; re-run is deterministic.
 
 ### Task 8 — Index + data-quality validation  `[ ]`
