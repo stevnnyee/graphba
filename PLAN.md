@@ -6,7 +6,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ---
 
-## Phase 1 — Data Layer  `[~]`
+## Phase 1 — Data Layer  `[x]`  ✅ COMPLETE
 
 Fetch, model, and store every player + teammate relationship from nba_api.
 
@@ -111,9 +111,26 @@ Separate pass (no API): self-join `roster_memberships` on (team_id, season), emi
 
 **Done when:** `edges` populated; known teammates have an edge with correct seasons; non-overlapping players have none; re-run is deterministic.
 
-### Task 8 — Index + data-quality validation  `[ ]`
-Add indexes (name search; season-range/GIN on edges; join indexes on memberships). Run validation: edge counts, orphans, zero-edge players, mid-season-trade players under multiple teams.
-**Done when:** target queries are fast; validation numbers sane with no unexplained gaps.
+### Task 8 — Index + data-quality validation  `[x]`  ✅ DONE
+Add indexes for known queries; run a read-only data-quality audit.
+
+**Indexes (in `schema.sql`, applied via `make schema`):** `pg_trgm` GIN on `players.full_name` (typeahead substring search); `edges(player_b_id)` (PK only covers the leading `player_a_id`, so this makes "all edges touching X" fast in both directions); `roster_memberships(team_id, season)` (speeds the Task 7 self-join + roster lookups). **Deferred:** GIN on `edges.seasons` — pathfinding loads the graph in memory and no season-filter query exists yet; add it in Phase 2 when one does (don't build unused indexes).
+
+- `[x]` 8.1 Decide index set (above); defer `edges.seasons` GIN
+- `[x]` 8.2 Add indexes + `pg_trgm` extension to `schema.sql` (CREATE … IF NOT EXISTS, re-runnable)
+- `[x]` 8.3 `scripts/validate_data.py` + `make validate` — counts, zero-edge players (split in-scope vs pre-1990), mid-season trades, edge stats
+- `[x]` 8.4 Applied + validated. Numbers sane; both surprises explained (below). No unexplained gaps.
+
+**Done when:** target queries are fast; validation numbers sane with no unexplained gaps. ✅
+
+**Validation findings (documented, both = data-source characteristics, not bugs):**
+- **2,131 zero-edge players total** — pre-1990 retirees (in `players` from full history, never on a 1990+ roster). Expected.
+- **233 zero-edge players active ≥ 1990** — all have **0 memberships**; all fringe/two-way/recent players (e.g. Kennedy Chandler) in `CommonAllPlayers` but never on a standard `CommonTeamRoster`. Harmless isolated nodes; hide at display time.
+- **Only 1 mid-season-trade player-season** — `CommonTeamRoster` returns **season-end rosters**, so traded players appear once (final team). The schema/derivation handle multi-team correctly, but the source under-reports trades → graph **misses some trade-driven teammate edges**. *Possible future enhancement:* derive per-season team affiliations from game logs to recover them. Out of scope for Phase 1.
+
+---
+
+## ✅ Phase 1 COMPLETE — final data: 30 teams · 5,130 players · 15,655 memberships · 79,488 edges. Indexed + validated.
 
 ---
 

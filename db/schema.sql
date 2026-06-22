@@ -43,3 +43,21 @@ CREATE TABLE IF NOT EXISTS edges (
     PRIMARY KEY (player_a_id, player_b_id),
     CHECK (player_a_id < player_b_id)
 );
+
+-- Indexes (Task 8). Added after bulk load so ingestion isn't slowed by them.
+-- Each serves a known query; the GIN on edges.seasons is deferred until a
+-- season-filter query actually exists (Phase 2).
+
+-- Typeahead search: case-insensitive substring match on player names.
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX IF NOT EXISTS idx_players_full_name_trgm
+    ON players USING gin (full_name gin_trgm_ops);
+
+-- Edges PK indexes player_a_id (leading col) only; this covers the other half
+-- so "all edges touching player X" is fast in both directions.
+CREATE INDEX IF NOT EXISTS idx_edges_player_b
+    ON edges (player_b_id);
+
+-- Speeds the Task 7 self-join (matched on team+season) and team-roster lookups.
+CREATE INDEX IF NOT EXISTS idx_roster_memberships_team_season
+    ON roster_memberships (team_id, season);

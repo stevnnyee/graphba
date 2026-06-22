@@ -44,6 +44,9 @@ ingest-rosters: ## Crawl team rosters into the database (resumable, long-running
 derive-edges: ## Derive the edges graph from roster memberships (pure SQL, rebuilds)
 	python -m scripts.derive_edges
 
+validate: ## Run read-only data-quality audit queries and print a report
+	python -m scripts.validate_data
+
 schema: ## Apply db/schema.sql to the database
 	docker exec -i graphba-db psql -U graphba -d graphba < db/schema.sql
 
@@ -59,4 +62,4 @@ lint: ## Check code with ruff (lint + import order)
 format: ## Auto-format code with ruff
 	ruff format .
 
-.PHONY: help up down reset ps logs psql install freeze healthcheck ingest-teams ingest-players ingest-rosters derive-edges schema test test-live lint format
+.PHONY: help up down reset ps logs psql install freeze healthcheck ingest-teams ingest-players ingest-rosters derive-edges validate schema test test-live lint format
