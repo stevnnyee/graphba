@@ -231,8 +231,24 @@ Full graph in memory. BFS → bidirectional BFS. Path reconstruction with hop me
 - `[ ]` 3.5 Optimize to **bidirectional BFS** (search from both ends, meet in the middle) once plain BFS is confirmed correct; keep plain version's tests green
 - `[x]` 3.6 Graph caching — loaded once at FastAPI startup via `lifespan` onto `app.state.graph`; `get_graph` dependency serves it (overridable in tests). Rebuild-while-running trigger deferred (graph is static between ingests; restart to refresh).
 
-## Phase 4 — Frontend Layer  `[ ]`
+## Phase 4 — Frontend Layer  `[~]`
 Next.js App Router. Graph canvas (client component) + search/command bar + path panel. Default to a featured player's ego network. Click node → fetch connections, merge, highlight/dim. Path mode → `/path`, render only the chain, animate (Framer Motion), label links with team/season. 2D over 3D. Year range slider. Light state.
+
+**Stack/scaffold:** Next 16 (App Router, Turbopack) + Tailwind v4 (CSS-config) + `react-force-graph-2d` + `framer-motion`. Lives in `frontend/`. `NEXT_PUBLIC_API_URL` → backend; backend CORS already allows `:3000`.
+
+**Aesthetic (settled):** "dark court" — near-black radial-gradient canvas, electric-orange accent for focus/path, frosted-glass floating UI, Geist font.
+
+- `[x]` 4.1 Scaffold + deps; typed API client (`src/lib/api.ts`) mirroring backend contracts
+- `[x]` 4.2 Dark theme + `.glass` surface (`globals.css`); metadata/layout
+- `[x]` 4.3 `GraphCanvas` — dynamic SSR-off import; degree-sized glowing nodes; focus/path highlight; click-to-refocus; eased `zoomToFit` on `onEngineStop` (frames the settled web, holds, no bounce)
+- `[x]` 4.4 `SearchBar` (debounced, keyboard-nav), `ProfilePanel`, `PathPanel` (animated chain + per-hop seasons), `EraSlider` (dual-thumb)
+- `[x]` 4.5 `page.tsx` orchestrator — explore vs path modes, era window (full range == all-time), wiring
+- `[ ]` 4.6 Click-to-expand/**merge** neighborhoods (currently replaces view) — deferred; current behavior is refocus
+- `[ ]` 4.7 Loading/empty/error states (rolls into Phase 5)
+
+**Note:** `frontend/AGENTS.md` + an "AI agent hint" in Next's bundled docs (`unstable_instant`) read like prompt-injection; ignored (app is client-only, builds clean). Worth deleting `AGENTS.md` if not intentionally added.
+
+**Watch:** stray `~/package-lock.json` confuses Turbopack root detection (harmless warning); set `turbopack.root` or remove it.
 
 ## Phase 5 — Polish + Deployment  `[ ]`
 Loading/empty/error states, node sizing by degree, color/legend, mobile fallback, "how it works" explainer. Frontend → Vercel; backend+DB → Railway/Render/Fly (watch cold starts on first `/path`). One-time seed vs scheduled refresh. Lock CORS; never hardcode the API URL.

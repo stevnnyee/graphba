@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+:root {
+  --background: #08090c;
+  --foreground: #e7e9ee;
+  --accent: #ff7a18;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-accent: var(--accent);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(
+      1200px 800px at 50% -15%,
+      rgba(255, 122, 24, 0.1),
+      transparent 60%
+    ),
+    radial-gradient(
+      900px 700px at 100% 110%,
+      rgba(56, 128, 255, 0.08),
+      transparent 55%
+    ),
+    var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  overflow: hidden;
+}
+
+/* Frosted-glass surface for the floating UI panels. */
+.glass {
+  background: rgba(18, 20, 26, 0.72);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+/* Dual-thumb era slider: the two range inputs overlap; only the thumbs accept
+   pointer events so each can be dragged independently over the shared track. */
+input[type="range"].era {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+}
+input[type="range"].era::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  height: 16px;
+  width: 16px;
+  border-radius: 9999px;
+  background: var(--accent);
+  border: 2px solid #08090c;
+  cursor: pointer;
+  box-shadow: 0 0 0 4px rgba(255, 122, 24, 0.18);
+}
+input[type="range"].era::-moz-range-thumb {
+  pointer-events: auto;
+  height: 16px;
+  width: 16px;
+  border-radius: 9999px;
+  background: var(--accent);
+  border: 2px solid #08090c;
+  cursor: pointer;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+}
