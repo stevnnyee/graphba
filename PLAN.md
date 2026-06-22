@@ -177,8 +177,26 @@ Lock the wire shapes, then ship the first (cheapest, foundational) endpoint.
 
 **Done when:** `make test` green; `make api` serves `GET /players/{id}` returning the profile, 404 on unknown id.
 
-### Task 3 — Capped ego-network endpoint  `[ ]`  *(needs year-filter semantics finalized)*
+### Task 3 — Capped ego-network endpoint  `[~]`
 `GET /players/{id}/connections` — returns the graph contract `{nodes, links}` for the player's neighborhood, capped for display.
+
+**Year-filter semantics — FINALIZED: STRICT.** On a range `[from, to]` an edge counts iff the pair shared a roster *within* the window — i.e. the edge's `seasons` array **overlaps** `[from, to]` (`seasons && '{years…}'`). Matches slider intuition ("connections that existed in this era"); cumulative ("anything by year X") makes dragging the low end feel broken. Open-ended bounds default to `MIN_SEASON`(1946)/`CURRENT_SEASON`.
+
+**Design decisions (settled):**
+- Returns the existing graph contract `Graph{nodes:[Node], links:[Link]}` — first consumer of the locked shape.
+- **Cap** = top-`limit` neighbors by `shared_seasons DESC` (strongest connections survive the cull), default 25, max 200. v1 is depth-1 (direct teammates) with a star topology (focus↔neighbor links only; neighbor↔neighbor edges deferred).
+- Neighbor query = **UNION ALL** of the two canonical halves (`a=id`, `b=id`) so each uses its index (PK / `edges(player_b_id)`), not an un-indexable OR.
+- Strict filter spliced in only when a range is given; year values travel as a bound param, never string-formatted into SQL.
+- 404 when focus id unknown (existence checked before the neighbor query).
+
+- `[x]` 3.1 Add deferred GIN index on `edges.seasons` to `schema.sql` (the array-overlap filter now exists)
+- `[x]` 3.2 `MIN_SEASON` constant (`backend/config.py`)
+- `[x]` 3.3 Query layer — `get_connections()` returns `Graph | None` (`backend/queries.py`)
+- `[x]` 3.4 `GET /players/{id}/connections` route — `limit` + optional `season_from`/`season_to` (`backend/main.py`)
+- `[x]` 3.5 Tests — query (graph assembly, strict window, None-on-missing) and route (serialization, window pass-through, 404, limit cap)
+- `[ ]` 3.6 Apply schema (`make schema` — creates the GIN index); run `make test`/`format`/`lint`; live smoke `GET /players/201939/connections?season_from=2015&season_to=2017`
+
+**Done when:** `make test` green; endpoint returns capped `{nodes, links}` and the strict era window narrows the neighbor set.
 
 ### Task 4 — Pathfinding endpoint  `[ ]`
 `GET /path?from=&to=` — ordered nodes + per-hop team/season. Thin wrapper over Phase 3's BFS.

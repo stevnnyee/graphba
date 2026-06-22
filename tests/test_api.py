@@ -10,7 +10,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.main import app, get_db
-from backend.schemas import PlayerProfile, PlayerSearchResult, TeamRef
+from backend.schemas import (
+    Graph,
+    Link,
+    Node,
+    PlayerProfile,
+    PlayerSearchResult,
+    TeamRef,
+)
 
 
 @pytest.fixture
@@ -86,3 +93,42 @@ def test_profile_404_when_player_missing(client):
 def test_profile_rejects_non_integer_id(client):
     # Path param is typed int → FastAPI validates before the handler runs.
     assert client.get("/players/abc").status_code == 422
+
+
+def test_connections_returns_graph(client):
+    fake = Graph(
+        nodes=[
+            Node(id=201939, name="Stephen Curry"),
+            Node(id=203110, name="Draymond Green"),
+        ],
+        links=[Link(source=201939, target=203110, seasons=[2012, 2013])],
+    )
+    with patch("backend.main.get_connections", return_value=fake) as mock_conn:
+        resp = client.get(
+            "/players/201939/connections",
+            params={"season_from": 2012, "season_to": 2014},
+        )
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "nodes": [
+            {"id": 201939, "name": "Stephen Curry"},
+            {"id": 203110, "name": "Draymond Green"},
+        ],
+        "links": [{"source": 201939, "target": 203110, "seasons": [2012, 2013]}],
+    }
+    # Era window is passed through to the query layer.
+    _conn, player_id, limit, season_from, season_to = mock_conn.call_args.args
+    assert (player_id, limit, season_from, season_to) == (201939, 25, 2012, 2014)
+
+
+def test_connections_404_when_player_missing(client):
+    with patch("backend.main.get_connections", return_value=None):
+        resp = client.get("/players/999999/connections")
+    assert resp.status_code == 404
+
+
+def test_connections_rejects_oversized_limit(client):
+    assert (
+        client.get("/players/1/connections", params={"limit": 9999}).status_code == 422
+    )

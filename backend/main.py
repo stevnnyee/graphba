@@ -7,15 +7,15 @@ Run locally: ``make api`` (uvicorn with auto-reload).
 """
 
 from collections.abc import Iterator
-from typing import Annotated
+from typing import Annotated, Optional
 
 import psycopg
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.database import get_connection
-from backend.queries import get_player_profile, search_players
-from backend.schemas import PlayerProfile, PlayerSearchResult
+from backend.queries import get_connections, get_player_profile, search_players
+from backend.schemas import Graph, PlayerProfile, PlayerSearchResult
 
 app = FastAPI(title="GraphBA API")
 
@@ -60,3 +60,18 @@ def player_profile_route(
     if profile is None:
         raise HTTPException(status_code=404, detail="Player not found")
     return profile
+
+
+@app.get("/players/{player_id}/connections", response_model=Graph)
+def player_connections_route(
+    player_id: int,
+    conn: Annotated[psycopg.Connection, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=200, description="Max neighbors")] = 25,
+    season_from: Annotated[Optional[int], Query(description="Era window start")] = None,
+    season_to: Annotated[Optional[int], Query(description="Era window end")] = None,
+) -> Graph:
+    """Capped ego network `{nodes, links}`; optional era window. 404 if unknown."""
+    graph = get_connections(conn, player_id, limit, season_from, season_to)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="Player not found")
+    return graph

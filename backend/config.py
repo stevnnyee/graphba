@@ -32,3 +32,7 @@ def _current_season_start_year(today: date | None = None) -> int:
 
 # Used to render a still-active player's range as "<from>–present".
 CURRENT_SEASON = _current_season_start_year()
+
+# Earliest NBA season (1946-47 == the BAA's first year). The semantic floor for
+# an open-ended era-slider lower bound; data currently starts at 1990.
+MIN_SEASON = 1946

@@ -61,3 +61,9 @@ CREATE INDEX IF NOT EXISTS idx_edges_player_b
 -- Speeds the Task 7 self-join (matched on team+season) and team-roster lookups.
 CREATE INDEX IF NOT EXISTS idx_roster_memberships_team_season
     ON roster_memberships (team_id, season);
+
+-- Phase 2 (Task 3): the era slider filters edges by season via array overlap
+-- (seasons && '{years…}'). GIN on the INT[] makes that overlap index-accelerated.
+-- Deferred in Phase 1 until this query existed; it now does.
+CREATE INDEX IF NOT EXISTS idx_edges_seasons_gin
+    ON edges USING gin (seasons);

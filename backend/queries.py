@@ -8,8 +8,15 @@ from __future__ import annotations
 
 import psycopg
 
-from backend.config import CURRENT_SEASON
-from backend.schemas import PlayerProfile, PlayerSearchResult, TeamRef
+from backend.config import CURRENT_SEASON, MIN_SEASON
+from backend.schemas import (
+    Graph,
+    Link,
+    Node,
+    PlayerProfile,
+    PlayerSearchResult,
+    TeamRef,
+)
 
 
 def _format_active_years(first: int | None, last: int | None) -> str:
@@ -131,3 +138,69 @@ def get_player_profile(
         teams=teams,
         connection_count=connection_count,
     )
+
+
+_FOCUS_SQL = "SELECT id, full_name FROM players WHERE id = %(id)s"
+
+# The focus player's neighbors, strongest connection first, capped for display.
+# UNION ALL of the two canonical halves (a = id, b = id) so each half uses its
+# own index (PK / edges(player_b_id)) instead of an un-indexable OR. {window} is
+# the strict era filter, spliced in only when a range is given: `seasons && %(window)s`
+# keeps an edge iff the pair shared a roster within the window (array overlap,
+# accelerated by the GIN on edges.seasons). The string is a fixed fragment, never
+# user input — the year values travel as a bound param.
+_CONNECTIONS_SQL = """
+    SELECT nbr.neighbor_id, p.full_name, nbr.seasons
+    FROM (
+        SELECT player_b_id AS neighbor_id, shared_seasons, seasons
+        FROM edges
+        WHERE player_a_id = %(id)s {window}
+        UNION ALL
+        SELECT player_a_id AS neighbor_id, shared_seasons, seasons
+        FROM edges
+        WHERE player_b_id = %(id)s {window}
+    ) nbr
+    JOIN players p ON p.id = nbr.neighbor_id
+    ORDER BY nbr.shared_seasons DESC, p.full_name
+    LIMIT %(limit)s
+"""
+
+
+def get_connections(
+    conn: psycopg.Connection,
+    player_id: int,
+    limit: int,
+    season_from: int | None = None,
+    season_to: int | None = None,
+) -> Graph | None:
+    """Capped ego network for one player as the `{nodes, links}` contract.
+
+    Returns the focus node plus its top-`limit` teammates (by shared seasons) and
+    a star of links between them. Strict era filter: when a season range is given,
+    only edges whose seasons fall within it are kept. None if the focus is unknown.
+    """
+    params: dict = {"id": player_id, "limit": limit}
+    window = ""
+    if season_from is not None or season_to is not None:
+        start = season_from if season_from is not None else MIN_SEASON
+        end = season_to if season_to is not None else CURRENT_SEASON
+        params["window"] = list(range(start, end + 1))
+        # Cast to int[]: psycopg adapts a small-int list as smallint[], but the
+        # column is integer[] and there's no integer[] && smallint[] operator.
+        window = "AND seasons && %(window)s::int[]"
+
+    with conn.cursor() as cur:
+        cur.execute(_FOCUS_SQL, {"id": player_id})
+        focus = cur.fetchone()
+        if focus is None:
+            return None
+        cur.execute(_CONNECTIONS_SQL.format(window=window), params)
+        rows = cur.fetchall()
+
+    focus_id, focus_name = focus
+    nodes = [Node(id=focus_id, name=focus_name)]
+    links = []
+    for neighbor_id, name, seasons in rows:
+        nodes.append(Node(id=neighbor_id, name=name))
+        links.append(Link(source=focus_id, target=neighbor_id, seasons=seasons))
+    return Graph(nodes=nodes, links=links)

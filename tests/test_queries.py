@@ -6,10 +6,18 @@ from backend.config import CURRENT_SEASON
 from backend.queries import (
     _escape_like,
     _format_active_years,
+    get_connections,
     get_player_profile,
     search_players,
 )
-from backend.schemas import PlayerProfile, PlayerSearchResult, TeamRef
+from backend.schemas import (
+    Graph,
+    Link,
+    Node,
+    PlayerProfile,
+    PlayerSearchResult,
+    TeamRef,
+)
 
 
 def test_format_active_years_retired_player():
@@ -90,4 +98,54 @@ def test_get_player_profile_returns_none_when_missing():
 
     assert get_player_profile(conn, 999999) is None
     # Short-circuits after the first lookup — no teams/count queries.
+    cur.fetchall.assert_not_called()
+
+
+def test_get_connections_builds_ego_graph():
+    cur = MagicMock()
+    cur.fetchone.return_value = (201939, "Stephen Curry")  # focus
+    cur.fetchall.return_value = [
+        (203110, "Draymond Green", [2012, 2013, 2014]),
+        (202691, "Klay Thompson", [2011, 2012]),
+    ]
+    conn = MagicMock()
+    conn.cursor.return_value.__enter__.return_value = cur
+
+    graph = get_connections(conn, 201939, limit=25)
+
+    assert graph == Graph(
+        nodes=[
+            Node(id=201939, name="Stephen Curry"),
+            Node(id=203110, name="Draymond Green"),
+            Node(id=202691, name="Klay Thompson"),
+        ],
+        links=[
+            Link(source=201939, target=203110, seasons=[2012, 2013, 2014]),
+            Link(source=201939, target=202691, seasons=[2011, 2012]),
+        ],
+    )
+
+
+def test_get_connections_applies_strict_window():
+    cur = MagicMock()
+    cur.fetchone.return_value = (201939, "Stephen Curry")
+    cur.fetchall.return_value = []
+    conn = MagicMock()
+    conn.cursor.return_value.__enter__.return_value = cur
+
+    get_connections(conn, 201939, limit=25, season_from=2015, season_to=2017)
+
+    # Last execute is the neighbor query: window clause spliced, years as a param.
+    sql, params = cur.execute.call_args.args
+    assert "seasons && %(window)s" in sql
+    assert params["window"] == [2015, 2016, 2017]
+
+
+def test_get_connections_none_when_focus_missing():
+    cur = MagicMock()
+    cur.fetchone.return_value = None
+    conn = MagicMock()
+    conn.cursor.return_value.__enter__.return_value = cur
+
+    assert get_connections(conn, 999999, limit=25) is None
     cur.fetchall.assert_not_called()
