@@ -5,11 +5,6 @@ players are connected if they shared a roster in the same season. Explore any
 player's neighborhood, then find the shortest "six degrees" chain between any two
 players in league history.
 
-<!-- Add a screen recording here — it's the most important part of this README.
-     Capture a ~10s GIF of searching a player + finding a path, save it to
-     docs/demo.gif, and uncomment the line below. -->
-<!-- ![GraphBA demo](docs/demo.gif) -->
-
 > ~5,100 players · ~15,700 roster memberships · **79,488** derived teammate edges
 > (seasons 1990–present).
 
