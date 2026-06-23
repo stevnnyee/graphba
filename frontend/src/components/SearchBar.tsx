@@ -77,23 +77,31 @@ export default function SearchBar({
         placeholder={placeholder}
         className="glass text-foreground focus:ring-accent/60 w-full rounded-xl px-4 py-3 text-sm transition outline-none placeholder:text-white/45 focus:ring-2"
       />
-      {open && results.length > 0 && (
+      {open && q.trim().length >= 2 && (
         <ul className="glass absolute z-30 mt-2 w-full overflow-hidden rounded-xl">
-          {results.map((p, i) => (
-            <li key={p.id}>
-              <button
-                type="button"
-                onMouseEnter={() => setActive(i)}
-                onClick={() => choose(p)}
-                className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-sm transition ${
-                  i === active ? "bg-accent/15" : "hover:bg-white/5"
-                }`}
-              >
-                <span className="font-medium">{p.name}</span>
-                <span className="text-xs text-white/40">{p.active_years}</span>
-              </button>
+          {results.length > 0 ? (
+            results.map((p, i) => (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  onMouseEnter={() => setActive(i)}
+                  onClick={() => choose(p)}
+                  className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-sm transition ${
+                    i === active ? "bg-accent/15" : "hover:bg-white/5"
+                  }`}
+                >
+                  <span className="font-medium">{p.name}</span>
+                  <span className="text-xs text-white/40">
+                    {p.active_years}
+                  </span>
+                </button>
+              </li>
+            ))
+          ) : (
+            <li className="px-4 py-2.5 text-sm text-white/40">
+              No players found
             </li>
-          ))}
+          )}
         </ul>
       )}
     </div>

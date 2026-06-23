@@ -35,6 +35,10 @@ export default function Home() {
   const [pathTo, setPathTo] = useState<PlayerSearchResult | null>(null);
   const [path, setPath] = useState<PathResponse | null>(null);
 
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0); // bump to retry the last fetch
+
   // A full-range era is equivalent to "all-time", so only send a window when
   // the user has actually narrowed it.
   const windowed = era[0] !== MIN_SEASON || era[1] !== MAX_SEASON;
@@ -45,40 +49,56 @@ export default function Home() {
   useEffect(() => {
     if (mode !== "explore" || focusId == null) return;
     let cancelled = false;
+    setLoading(true);
+    setError(false);
     (async () => {
-      const [g, p] = await Promise.all([
-        getConnections(focusId, { limit: 30, from: fromYear, to: toYear }),
-        getProfile(focusId),
-      ]);
-      if (!cancelled) {
-        setGraph(g);
-        setProfile(p);
+      try {
+        const [g, p] = await Promise.all([
+          getConnections(focusId, { limit: 30, from: fromYear, to: toYear }),
+          getProfile(focusId),
+        ]);
+        if (!cancelled) {
+          setGraph(g);
+          setProfile(p);
+        }
+      } catch {
+        if (!cancelled) setError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    })().catch(() => {});
+    })();
     return () => {
       cancelled = true;
     };
-  }, [mode, focusId, fromYear, toYear]);
+  }, [mode, focusId, fromYear, toYear, reloadKey]);
 
   // Path mode: once both endpoints are chosen, compute the chain and render it.
   useEffect(() => {
     if (mode !== "path" || !pathFrom || !pathTo) return;
     let cancelled = false;
+    setLoading(true);
+    setError(false);
     (async () => {
-      const r = await getPath(pathFrom.id, pathTo.id, {
-        from: fromYear,
-        to: toYear,
-      });
-      if (!cancelled) {
-        setPath(r);
-        setGraph({ nodes: r.nodes, links: r.links });
-        setProfile(null);
+      try {
+        const r = await getPath(pathFrom.id, pathTo.id, {
+          from: fromYear,
+          to: toYear,
+        });
+        if (!cancelled) {
+          setPath(r);
+          setGraph({ nodes: r.nodes, links: r.links });
+          setProfile(null);
+        }
+      } catch {
+        if (!cancelled) setError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    })().catch(() => {});
+    })();
     return () => {
       cancelled = true;
     };
-  }, [mode, pathFrom, pathTo, fromYear, toYear]);
+  }, [mode, pathFrom, pathTo, fromYear, toYear, reloadKey]);
 
   function handleNodeClick(id: number) {
     setMode("explore");
@@ -91,6 +111,19 @@ export default function Home() {
       setPath(null);
     }
   }
+
+  function retry() {
+    setError(false);
+    setReloadKey((k) => k + 1);
+  }
+
+  // Explore landed but the focus player has no teammates in the current view.
+  const showEmpty =
+    !loading &&
+    !error &&
+    mode === "explore" &&
+    focusId != null &&
+    graph.nodes.length <= 1;
 
   const pathIds =
     mode === "path" && path?.found
@@ -164,6 +197,42 @@ export default function Home() {
         to={era[1]}
         onChange={(f, t) => setEra([f, t])}
       />
+
+      {/* Loading — non-blocking spinner over the canvas */}
+      {loading && (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+          <div className="border-t-accent h-9 w-9 animate-spin rounded-full border-2 border-white/15" />
+        </div>
+      )}
+
+      {/* Empty — focus player has no connections in this era */}
+      {showEmpty && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+          <p className="glass rounded-xl px-4 py-2 text-xs text-white/60">
+            No teammates found{windowed ? " in this era" : ""}.
+          </p>
+        </div>
+      )}
+
+      {/* Error — blocking card with retry */}
+      {error && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center">
+          <div className="glass max-w-xs rounded-2xl p-6 text-center">
+            <p className="text-sm font-semibold">Couldn’t reach the server</p>
+            <p className="mt-1 text-xs leading-relaxed text-white/55">
+              The backend may be offline. Make sure it’s running, then try
+              again.
+            </p>
+            <button
+              type="button"
+              onClick={retry}
+              className="bg-accent/20 text-accent hover:bg-accent/30 mt-4 rounded-lg px-4 py-2 text-xs font-medium transition"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
