@@ -176,8 +176,8 @@ export default function GraphCanvas({
               // Dark halo so the label stays legible whether it lands over a
               // light sphere or the dark canvas.
               ctx.lineJoin = "round";
-              ctx.lineWidth = fontSize * 0.5;
-              ctx.strokeStyle = "rgba(4,7,11,0.9)";
+              ctx.lineWidth = fontSize * 0.22;
+              ctx.strokeStyle = "rgba(4,7,11,0.85)";
               ctx.strokeText(node.name, node.x, labelY);
               ctx.fillStyle = "#f4e4c1"; // warm cream — not white
               ctx.fillText(node.name, node.x, labelY);
