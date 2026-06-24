@@ -252,3 +252,5 @@ Next.js App Router. Graph canvas (client component) + search/command bar + path 
 
 ## Phase 5 — Polish + Deployment  `[ ]`
 Loading/empty/error states, node sizing by degree, color/legend, mobile fallback, "how it works" explainer. Frontend → Vercel; backend+DB → Railway/Render/Fly (watch cold starts on first `/path`). One-time seed vs scheduled refresh. Lock CORS; never hardcode the API URL.
+
+Shhhhh
